@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">PDF to JPG Converter</h3>
+            </div>
+            <div class="card-body">
+                <p>Upload a PDF file to convert all its pages into separate JPG images. The images will be downloaded as a ZIP file.</p>
+                <form method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="pdf_file" class="form-label">Select PDF File</label>
+                        <input class="form-control" type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="convertBtn">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="spinner"></span>
+                        <span id="btnText">Convert & Download</span>
+                    </button>
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary">Back</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.querySelector('form').addEventListener('submit', function() {
+        const btn = document.getElementById('convertBtn');
+        const spinner = document.getElementById('spinner');
+        const btnText = document.getElementById('btnText');
+        
+        btn.disabled = true;
+        spinner.classList.remove('d-none');
+        btnText.textContent = 'Processing...';
+    });
+</script>
+{% endblock %}

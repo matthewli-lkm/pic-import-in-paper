@@ -1,0 +1,424 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">PDF Watermarker</h3>
+            </div>
+            <div class="card-body">
+                <form id="watermark-form" method="POST" enctype="multipart/form-data" action="{{ url_for('watermarker.process') }}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">1. Upload PDF</h5>
+                            <div class="mb-3">
+                                <label for="pdf_file" class="form-label">Select PDF File</label>
+                                <input class="form-control" type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
+                            </div>
+
+                            <h5 class="mb-3 mt-4">2. Select Watermark Source</h5>
+                            
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="png_option" id="custom_png" value="custom" checked onchange="togglePngInput()">
+                                <label class="form-check-label" for="custom_png">
+                                    Upload Custom PNG
+                                </label>
+                            </div>
+                            <div id="customPngDiv" class="mb-3 ps-4">
+                                <input class="form-control" type="file" name="png_file" id="png_file" accept="image/png">
+                            </div>
+
+                            {% if shared_assets %}
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="png_option" id="shared_png" value="shared" onchange="togglePngInput()">
+                                <label class="form-check-label" for="shared_png">
+                                    Use from Shared Assets (Cropped Images)
+                                </label>
+                            </div>
+                            <div id="sharedPngDiv" class="mb-3 ps-4" style="display:none;">
+                                <select class="form-select" name="shared_asset_name" id="shared_asset_name">
+                                    {% for asset in shared_assets %}
+                                        <option value="{{ asset }}">{{ asset }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% else %}
+                            <div class="text-muted ps-4 mb-3">
+                                <small>No shared assets available. Use the <a href="{{ url_for('cropper.index') }}">Cropper Tool</a> to save some.</small>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <h5 class="mb-3">3. Positioning</h5>
+                            <div class="mb-3">
+                                <label for="offset_x" class="form-label">Offset X</label>
+                                <input type="number" class="form-control" name="offset_x" id="offset_x" value="-30">
+                            </div>
+                            <div class="mb-3">
+                                <label for="offset_y" class="form-label">Offset Y</label>
+                                <input type="number" class="form-control" name="offset_y" id="offset_y" value="265">
+                            </div>
+
+                            <!-- Hidden Scale Input -->
+                            <input type="hidden" name="scale" id="scale" value="0.2">
+                            
+                            <div class="card bg-light border">
+                                <div class="card-header text-center">
+                                    <small class="text-muted">Drag to move • Drag corner to resize</small>
+                                </div>
+                                <div class="card-body p-0 position-relative text-center" id="preview-container" style="min-height: 400px; overflow: hidden; background: #e9ecef; user-select: none;">
+                                    <span id="preview-placeholder" class="d-block mt-5 text-muted">Upload PDF & Image to Start</span>
+                                    
+                                    <!-- PDF Background -->
+                                    <div class="d-flex justify-content-center bg-dark" style="width: 100%; height: 100%;">
+                                        <img id="pdfBackground" src="" style="width: auto; max-width: 100%; display: none;" alt="PDF Background" draggable="false">
+                                    </div>
+                                    
+                                    <!-- Draggable Watermark Container -->
+                                    <div id="watermarkContainer" style="position: absolute; display: none; cursor: move; border: 1px dashed #007bff; width: 100px; height: auto;">
+                                        <img id="watermarkImage" src="" style="width: 100%; height: 100%; display: block; pointer-events: none;" draggable="false">
+                                        <!-- Resize Handle -->
+                                        <div id="resizeHandle" style="width: 15px; height: 15px; background: #007bff; position: absolute; bottom: -5px; right: -5px; cursor: se-resize; border-radius: 50%;"></div>
+                                        <div id="deleteHandle" style="position: absolute; top: -20px; right: 0; color: red; cursor: pointer; display: none;">&times;</div>
+                                    </div>
+
+                                </div>
+                                <div id="preview-loading" class="spinner-border text-primary position-absolute top-50 start-50 translate-middle" role="status" style="display:none;">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">Back</a>
+                        <button type="submit" class="btn btn-success btn-lg" id="submitBtn">
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="submitSpinner"></span>
+                            <span id="submitText">Apply Watermark & Download</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // State variables
+    let pdfWidthPts = 0;
+    let pdfHeightPts = 0;
+    let wmWidthPx = 0;
+    let wmHeightPx = 0; // Original image size
+    let wmScaleFactor = 0.2; // Match backend default
+
+    // Resize State
+    let isResizing = false;
+    let resizeStartX = 0;
+    let initialWidth = 0;
+    
+    // Drag State
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let initialLeft = 0;
+    let initialTop = 0;
+
+    const pdfImg = document.getElementById('pdfBackground');
+    const wmContainer = document.getElementById('watermarkContainer'); // Wrapper
+    const wmImg = document.getElementById('watermarkImage'); // Image inside
+    const resizeHandle = document.getElementById('resizeHandle');
+    
+    const container = document.getElementById('preview-container');
+    const loading = document.getElementById('preview-loading');
+    const placeholder = document.getElementById('preview-placeholder');
+
+    const inputX = document.getElementById('offset_x');
+    const inputY = document.getElementById('offset_y');
+    const inputScale = document.querySelector('input[name="scale"]');
+
+    const customPngDiv = document.getElementById('customPngDiv');
+    const sharedPngDiv = document.getElementById('sharedPngDiv');
+    const customPngRadio = document.getElementById('custom_png');
+    const sharedPngRadio = document.getElementById('shared_png');
+
+    // UI Toggles
+    function togglePngInput() {
+        if (customPngRadio.checked) {
+            customPngDiv.style.display = 'block';
+            if (sharedPngDiv) sharedPngDiv.style.display = 'none';
+        } else if (sharedPngRadio && sharedPngRadio.checked) {
+            customPngDiv.style.display = 'none';
+            if (sharedPngDiv) sharedPngDiv.style.display = 'block';
+        }
+        updateAssets();
+    }
+
+
+
+    // Event Listeners for Assets
+    document.getElementById('pdf_file').addEventListener('change', updateAssets);
+    document.getElementById('png_file').addEventListener('change', updateAssets);
+    const sharedAssetSelect = document.getElementById('shared_asset_name');
+    if(sharedAssetSelect) {
+        sharedAssetSelect.addEventListener('change', updateAssets);
+    }
+    if(sharedPngRadio) sharedPngRadio.addEventListener('change', togglePngInput);
+    customPngRadio.addEventListener('change', togglePngInput);
+
+    // Event Listeners for Positioning Inputs
+    inputX.addEventListener('input', updateVisualPosition);
+    inputY.addEventListener('input', updateVisualPosition);
+    if(inputScale) inputScale.addEventListener('change', () => {
+         wmScaleFactor = parseFloat(inputScale.value) || 1.0;
+         updateVisualPosition();
+    });
+
+    // Interaction Logic (Drag & Resize)
+    // Note: detailed handlers are defined below
+    wmContainer.addEventListener('mousedown', startDrag);
+    resizeHandle.addEventListener('mousedown', startResize);
+    
+    document.addEventListener('mousemove', (e) => {
+        if (isDragging) drag(e);
+        if (isResizing) resize(e);
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            wmContainer.style.cursor = 'move';
+        }
+        if (isResizing) {
+            isResizing = false;
+        }
+    });
+    
+    // Also handle window resize to adjust scaling
+    window.addEventListener('resize', updateVisualPosition);
+
+    async function updateAssets() {
+        const pdfFile = document.getElementById('pdf_file').files[0];
+        if (!pdfFile) return;
+
+        // Check for PNG
+        let hasPng = false;
+        if (customPngRadio.checked) {
+            if (document.getElementById('png_file').files[0]) hasPng = true;
+        } else if (sharedPngRadio && sharedPngRadio.checked) {
+             hasPng = true;
+        }
+
+        loading.style.display = 'block';
+        placeholder.style.display = 'none';
+        pdfImg.style.display = 'none';
+        wmImg.style.display = 'none';
+        wmContainer.style.display = 'none'; // Hide container too
+
+        const formData = new FormData(document.getElementById('watermark-form'));
+
+        try {
+            const response = await fetch("{{ url_for('watermarker.interactive_preview_data') }}", {
+                method: 'POST',
+                body: formData
+            });
+
+            if(!response.ok) {
+                const err = await response.json();
+                console.error(err);
+                loading.style.display = 'none';
+                return;
+            }
+
+            const data = await response.json();
+            
+            // Set data
+            pdfWidthPts = data.pdf_width_pts;
+            pdfHeightPts = data.pdf_height_pts;
+            wmWidthPx = data.wm_width_px;
+            wmHeightPx = data.wm_height_px;
+
+            // Set Images
+            pdfImg.src = data.pdf_bg_url;
+            if (data.watermark_url) {
+                wmImg.src = data.watermark_url;
+            } else {
+                wmImg.src = "";
+            }
+
+            pdfImg.onload = () => {
+                loading.style.display = 'none';
+                pdfImg.style.display = 'block';
+                if (data.watermark_url) {
+                    wmImg.style.display = 'block';
+                    wmContainer.style.display = 'block'; // Show container
+                    setTimeout(updateVisualPosition, 50);
+                }
+            };
+
+        } catch (e) {
+            console.error(e);
+            loading.style.display = 'none';
+            placeholder.textContent = "Error loading preview.";
+            placeholder.style.display = 'block';
+        }
+    }
+
+    function getDisplayScale() {
+        if (!pdfWidthPts) return 1;
+        return pdfImg.clientWidth / pdfWidthPts;
+    }
+    
+    // Get Rendered PDF offsets (since it is centered in d-flex)
+    function getPDFImageOffset() {
+        if (!pdfImg) return { left: 0, top: 0 };
+        // relative to preview-container
+        const containerRect = container.getBoundingClientRect();
+        const imgRect = pdfImg.getBoundingClientRect();
+        return {
+            left: imgRect.left - containerRect.left,
+            top: imgRect.top - containerRect.top
+        };
+    }
+
+    function getWatermarkSizeInPts() {
+        if (!wmWidthPx || !wmHeightPx) return { width: 0, height: 0 };
+        const scale = Math.min(pdfWidthPts / wmWidthPx, pdfHeightPts / wmHeightPx, 1) * wmScaleFactor;
+        return {
+            width: wmWidthPx * scale,
+            height: wmHeightPx * scale
+        };
+    }
+
+    function updateVisualPosition() {
+        if (!pdfWidthPts || !wmWidthPx) return;
+
+        const displayScale = getDisplayScale();
+        const wmSizePts = getWatermarkSizeInPts();
+        const pdfOffset = getPDFImageOffset();
+        
+        // CSS Size (Visual)
+        const cssWidth = wmSizePts.width * displayScale;
+        const cssHeight = wmSizePts.height * displayScale;
+        
+        wmContainer.style.width = cssWidth + 'px';
+        wmContainer.style.height = cssHeight + 'px';
+
+        // Calculate Position
+        const offsetX = parseInt(inputX.value) || 0;
+        const offsetY = parseInt(inputY.value) || 0;
+
+        // Visual = (PDF Center Offset + User Offset) * Scale + PDF Background Offset
+        const x0_pts = (pdfWidthPts - wmSizePts.width) / 2 + offsetX;
+        const y0_pts = (pdfHeightPts - wmSizePts.height) / 2 + offsetY;
+        
+        wmContainer.style.left = (pdfOffset.left + x0_pts * displayScale) + 'px';
+        wmContainer.style.top = (pdfOffset.top + y0_pts * displayScale) + 'px';
+    }
+
+    // --- Drag Logic ---
+    function startDrag(e) {
+        if (e.target === resizeHandle) return; // Ignore if clicking handle
+        if (!pdfWidthPts) return;
+        e.preventDefault();
+        isDragging = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        
+        initialLeft = parseFloat(wmContainer.style.left) || 0;
+        initialTop = parseFloat(wmContainer.style.top) || 0;
+        
+        wmContainer.style.cursor = 'grabbing';
+    }
+
+    function drag(e) {
+        e.preventDefault();
+
+        const deltaX = e.clientX - dragStartX;
+        const deltaY = e.clientY - dragStartY;
+
+        const newLeft = initialLeft + deltaX;
+        const newTop = initialTop + deltaY;
+
+        wmContainer.style.left = newLeft + 'px';
+        wmContainer.style.top = newTop + 'px';
+        
+        updateInputsFromPosition(newLeft, newTop);
+    }
+    
+    function updateInputsFromPosition(cssLeft, cssTop) {
+        const displayScale = getDisplayScale();
+        const wmSizePts = getWatermarkSizeInPts();
+        const pdfOffset = getPDFImageOffset();
+
+        // Reverse: cssLeft = pdfOffset.left + x0_pts * displayScale
+        const x0_pts = (cssLeft - pdfOffset.left) / displayScale;
+        const y0_pts = (cssTop - pdfOffset.top) / displayScale;
+
+        const calculatedOffsetX = x0_pts - (pdfWidthPts - wmSizePts.width) / 2;
+        const calculatedOffsetY = y0_pts - (pdfHeightPts - wmSizePts.height) / 2;
+
+        inputX.value = Math.round(calculatedOffsetX);
+        inputY.value = Math.round(calculatedOffsetY);
+    }
+
+    // --- Resize Logic ---
+    function startResize(e) {
+        e.preventDefault();
+        e.stopPropagation(); // Stop drag from firing
+        isResizing = true;
+        resizeStartX = e.clientX;
+        initialWidth = wmContainer.clientWidth; // Current CSS pixel width
+    }
+
+    function resize(e) {
+        e.preventDefault();
+        
+        const deltaX = e.clientX - resizeStartX;
+        const newCssWidth = initialWidth + deltaX;
+        
+        if (newCssWidth < 20) return; // Min width
+        
+        updateScaleFromWidth(newCssWidth);
+        updateVisualPosition();
+    }
+    
+    function updateScaleFromWidth(newCssWidth) {
+        const displayScale = getDisplayScale();
+        const baseScale = Math.min(pdfWidthPts / wmWidthPx, pdfHeightPts / wmHeightPx, 1);
+        
+        const currentWidthPts = newCssWidth / displayScale;
+        
+        if (baseScale === 0 || wmWidthPx === 0) return;
+        
+        let newScaleFactor = currentWidthPts / (baseScale * wmWidthPx);
+        
+        // Cap reasonable limits
+        if (newScaleFactor < 0.05) newScaleFactor = 0.05;
+        if (newScaleFactor > 5.0) newScaleFactor = 5.0;
+        
+        wmScaleFactor = newScaleFactor;
+        inputScale.value = wmScaleFactor.toFixed(4);
+    }
+
+    // Form Submit Loading State
+    document.getElementById('watermark-form').addEventListener('submit', function() {
+        const btn = document.getElementById('submitBtn');
+        const spinner = document.getElementById('submitSpinner');
+        const text = document.getElementById('submitText');
+        
+        btn.disabled = true;
+        spinner.classList.remove('d-none');
+        text.textContent = 'Processing PDF...';
+        
+        setTimeout(() => {
+            btn.disabled = false;
+            spinner.classList.add('d-none');
+            text.textContent = 'Apply Watermark & Download';
+        }, 3000);
+    });
+</script>
+{% endblock %}

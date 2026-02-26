@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row text-center">
+    <div class="col-12 mb-5">
+        <h1>Welcome to the Document Portal</h1>
+        <p class="lead">Select a tool to get started</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 tool-card">
+            <div class="card-body text-center">
+                <h5 class="card-title">Image Cropper & Transparency</h5>
+                <p class="card-text">Upload images or PDFs, crop them, and automatically make the background transparent.</p>
+                <a href="{{ url_for('cropper.index') }}" class="btn btn-primary">Open Tool</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 tool-card">
+            <div class="card-body text-center">
+                <h5 class="card-title">PDF to JPG Converter</h5>
+                <p class="card-text">Convert multi-page PDFs into separate JPEG images and download them as a zip file.</p>
+                <a href="{{ url_for('converter.index') }}" class="btn btn-primary">Open Tool</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 tool-card">
+            <div class="card-body text-center">
+                <h5 class="card-title">PDF Watermarker</h5>
+                <p class="card-text">Stamp logos or watermarks onto PDFs with precise positioning controls.</p>
+                <a href="{{ url_for('watermarker.index') }}" class="btn btn-primary">Open Tool</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

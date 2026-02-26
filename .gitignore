@@ -1,0 +1,39 @@
+# Python internals
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+
+# VS Code
+.vscode/
+
+# Environment
+.env
+.flaskenv
+*.env
+
+# OS Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# User uploads and processed files
+unified_doc_tool/uploads/*
+!unified_doc_tool/uploads/.gitkeep
+unified_doc_tool/processed/*
+!unified_doc_tool/processed/.gitkeep
+unified_doc_tool/shared_assets/*
+!unified_doc_tool/shared_assets/.gitkeep
+
+# Local config (if you add sensitive keys later)
+# config.py 
+
+# Internship documents (original source files)
+works done in internship*.docx
+*.zip
+extract_text.py
