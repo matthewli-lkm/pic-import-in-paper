@@ -9,6 +9,13 @@ import os
 app = Flask(__name__)
 app.config.from_object(Config)
 
+# Ensure upload directories exist (Critical for Cloud Deployment)
+with app.app_context():
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['PROCESSED_FOLDER'], exist_ok=True)
+    os.makedirs(app.config['SHARED_ASSETS_FOLDER'], exist_ok=True)
+    print(f"Verified directories at: {app.config['UPLOAD_FOLDER']}")
+
 # Register Blueprints
 app.register_blueprint(cropper_bp)
 app.register_blueprint(converter_bp)

@@ -106,7 +106,7 @@ def process():
     output_filename = f"watermarked_{pdf_filename}"
     output_path = os.path.join(current_app.config['PROCESSED_FOLDER'], output_filename)
     
-    insert_watermark_to_pdf(pdf_path, png_path, output_path, offset_x=offset_x, offset_y=offset_y)
+    insert_watermark_to_pdf(pdf_path, png_path, output_path, offset_x=offset_x, offset_y=offset_y, scale_factor=scale)
     
     return send_file(output_path, as_attachment=True)
 
